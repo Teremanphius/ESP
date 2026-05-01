@@ -22,22 +22,31 @@ local function createSafeDrawing(class)
 end
 
 local EspInterface = {
-	_objectCache = {},
-	sharedSettings = { limitDistance = false, maxDistance = 500 },
-	teamSettings = {
-		enemy = {
-			enabled = true, box = true,
-			name = true, distance = true,
-			healthBar = true, tracer = false,
-			chams = false -- Disabled by default
-		},
-		friendly = {
-			enabled = false, box = true,
-			name = true, distance = true,
-			healthBar = true, tracer = false,
-			chams = false -- Disabled by default
-		}
-	}
+    _objectCache = {},
+    sharedSettings = { limitDistance = false, maxDistance = 500 },
+    teamSettings = {
+        enemy = {
+            enabled = true, box = true,
+            name = true, distance = true,
+            healthBar = true, tracer = false,
+            chams = false,
+            -- Re-adding these so your UI doesn't crash:
+            boxColor = {Color3.fromRGB(150, 150, 150), 1},
+            nameColor = {Color3.fromRGB(255, 255, 255), 1},
+            distanceColor = {Color3.fromRGB(255, 255, 255), 1},
+            tracerColor = {Color3.fromRGB(150, 150, 150), 1}
+        },
+        friendly = {
+            enabled = false, box = true,
+            name = true, distance = true,
+            healthBar = true, tracer = false,
+            chams = false,
+            boxColor = {Color3.fromRGB(0, 255, 0), 1},
+            nameColor = {Color3.fromRGB(255, 255, 255), 1},
+            distanceColor = {Color3.fromRGB(255, 255, 255), 1},
+            tracerColor = {Color3.fromRGB(0, 255, 0), 1}
+        }
+    }
 }
 
 -- Team / Color Logic
@@ -46,13 +55,14 @@ function EspInterface.isFriendly(player)
 	return player.Team == localPlayer.Team
 end
 
-local function getPlayerColor(player)
-	-- If the game has no teams, or the target has no team, make them grey
-	if not localPlayer.Team or not player.Team then
-		return Color3.fromRGB(150, 150, 150)
-	end
-	-- Otherwise, use their team color
-	return player.TeamColor.Color
+local function getPlayerColor(player, typeKey)
+    local isFriend = EspInterface.isFriendly(player)
+    local settings = EspInterface.teamSettings[isFriend and "friendly" or "enemy"]
+    if player.Team then
+        return player.TeamColor.Color
+    end
+    local customColor = settings[typeKey .. "Color"][1]
+    return customColor
 end
 
 local EspObject = {}
