@@ -9,7 +9,6 @@ local container = Instance.new("Folder", gethui and gethui() or game:GetService(
 
 local floor, round, find, clear = math.floor, math.round, table.find, table.clear
 local wtvp = camera.WorldToViewportPoint
-local getPivot = workspace.GetPivot
 local findFirstChildOfClass = workspace.FindFirstChildOfClass
 
 local function createSafeDrawing(class)
@@ -52,7 +51,8 @@ function EspObject:Update()
 	end
 
 	local root = char.HumanoidRootPart
-	local pos, onScreen, depth = wtvp(camera, root.Position)
+	local screenPoint, onScreen = wtvp(camera, root.Position)
+	local depth = screenPoint.Z
 	
 	if interface.sharedSettings.limitDistance and depth > interface.sharedSettings.maxDistance then
 		onScreen = false
@@ -61,43 +61,43 @@ function EspObject:Update()
 	self.highlight.Enabled = options.chams
 	if options.chams then
 		self.highlight.Adornee = char
-		self.highlight.FillColor = options.chamsFillColor[1]
-		self.highlight.FillTransparency = options.chamsFillColor[2]
-		self.highlight.OutlineColor = options.chamsOutlineColor[1]
+		self.highlight.FillColor = options.chamsFillColor[1] or Color3.new(1,1,1)
+		self.highlight.FillTransparency = options.chamsFillColor[2] or 0.5
+		self.highlight.OutlineColor = options.chamsOutlineColor[1] or Color3.new(1,1,1)
 	end
 
-	if onScreen then
+	if onScreen and depth > 0 then
 		local size = (Vector2.new(2000, 2000) / depth)
-		local tl = Vector2.new(pos.X - size.X / 2, pos.Y - size.Y / 2)
+		local tl = Vector2.new(screenPoint.X - size.X / 2, screenPoint.Y - size.Y / 2)
 		
 		local box = self.drawings.box
 		box.Visible = options.box
 		box.Position = tl
 		box.Size = size
-		box.Color = options.boxColor[1]
-		box.Transparency = options.boxColor[2]
+		box.Color = options.boxColor[1] or Color3.new(1,1,1)
+		box.Transparency = options.boxColor[2] or 1
 
 		local nm = self.drawings.name
 		nm.Visible = options.name
 		nm.Text = self.player.Name
-		nm.Position = Vector2.new(pos.X, tl.Y - 15)
+		nm.Position = Vector2.new(screenPoint.X, tl.Y - 15)
 		nm.Center = true
 		nm.Outline = true
-		nm.Color = options.nameColor[1]
+		nm.Color = options.nameColor[1] or Color3.new(1,1,1)
 
 		local dist = self.drawings.distance
 		dist.Visible = options.distance
 		dist.Text = "[" .. round(depth) .. "m]"
-		dist.Position = Vector2.new(pos.X, tl.Y + size.Y + 5)
+		dist.Position = Vector2.new(screenPoint.X, tl.Y + size.Y + 5)
 		dist.Center = true
 		dist.Outline = true
-		dist.Color = options.distanceColor[1]
+		dist.Color = options.distanceColor[1] or Color3.new(1,1,1)
 
 		local hb = self.drawings.healthBar
 		hb.Visible = options.healthBar
 		local hum = findFirstChildOfClass(char, "Humanoid")
 		if hum then
-			local healthPercent = hum.Health / hum.MaxHealth
+			local healthPercent = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
 			hb.From = Vector2.new(tl.X - 5, tl.Y + size.Y)
 			hb.To = Vector2.new(tl.X - 5, tl.Y + size.Y - (size.Y * healthPercent))
 			hb.Color = Color3.fromRGB(255, 0, 0):Lerp(Color3.fromRGB(0, 255, 0), healthPercent)
@@ -107,8 +107,8 @@ function EspObject:Update()
 		local tr = self.drawings.tracer
 		tr.Visible = options.tracer
 		tr.From = Vector2.new(viewportSize.X / 2, viewportSize.Y)
-		tr.To = Vector2.new(pos.X, pos.Y)
-		tr.Color = options.tracerColor[1]
+		tr.To = Vector2.new(screenPoint.X, screenPoint.Y)
+		tr.Color = options.tracerColor[1] or Color3.new(1,1,1)
 	else
 		for _, d in next, self.drawings do d.Visible = false end
 	end
@@ -150,13 +150,22 @@ function EspInterface.Load()
 		if p ~= localPlayer then EspInterface._objectCache[p] = EspObject.new(p, EspInterface) end
 	end
 	for _, p in next, players:GetPlayers() do add(p) end
-	players.PlayerAdded:Connect(add)
-	players.PlayerRemoving:Connect(function(p)
+	EspInterface.added = players.PlayerAdded:Connect(add)
+	EspInterface.removed = players.PlayerRemoving:Connect(function(p)
 		if EspInterface._objectCache[p] then
 			EspInterface._objectCache[p]:Destruct()
 			EspInterface._objectCache[p] = nil
 		end
 	end)
+end
+
+function EspInterface.Unload()
+	if EspInterface.added then EspInterface.added:Disconnect() EspInterface.added = nil end
+	if EspInterface.removed then EspInterface.removed:Disconnect() EspInterface.removed = nil end
+	for p, obj in next, EspInterface._objectCache do
+		obj:Destruct()
+		EspInterface._objectCache[p] = nil
+	end
 end
 
 return EspInterface
