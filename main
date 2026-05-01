@@ -67,7 +67,7 @@ function EspObject:Update()
 	end
 
 	if onScreen and depth > 0 then
-		local size = (Vector2.new(2000, 2000) / depth)
+		local size = Vector2.new(2000 / depth, 2000 / depth)
 		local tl = Vector2.new(screenPoint.X - size.X / 2, screenPoint.Y - size.Y / 2)
 		
 		local box = self.drawings.box
@@ -142,6 +142,9 @@ local EspInterface = {
 }
 
 function EspInterface.isFriendly(player)
+	if localPlayer.Team == nil then 
+		return false -- If the game doesn't use teams, treat everyone as an enemy
+	end
 	return player.Team == localPlayer.Team
 end
 
