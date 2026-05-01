@@ -4,120 +4,21 @@ local workspace = game:GetService("Workspace")
 
 local localPlayer = players.LocalPlayer
 local camera = workspace.CurrentCamera
-local viewportSize = camera.ViewportSize
+local floor = math.floor
+
+-- Create a folder for Highlights
 local container = Instance.new("Folder", gethui and gethui() or game:GetService("CoreGui"))
 
-local floor, round, find, clear = math.floor, math.round, table.find, table.clear
-local wtvp = camera.WorldToViewportPoint
-local findFirstChildOfClass = workspace.FindFirstChildOfClass
-
+-- Safe Drawing API handler (prevents crashes if executor doesn't support drawings)
 local function createSafeDrawing(class)
 	local success, drawing = pcall(Drawing.new, class)
-	if not success then return {} end
+	if not success then 
+		return setmetatable({}, {
+			__index = function() return false end,
+			__newindex = function() end
+		})
+	end
 	return drawing
-end
-
-local EspObject = {}
-EspObject.__index = EspObject
-
-function EspObject.new(player, interface)
-	local self = setmetatable({}, EspObject)
-	self.player = player
-	self.interface = interface
-	self.drawings = {
-		box = createSafeDrawing("Square"),
-		name = createSafeDrawing("Text"),
-		distance = createSafeDrawing("Text"),
-		healthBar = createSafeDrawing("Line"),
-		tracer = createSafeDrawing("Line")
-	}
-	self.highlight = Instance.new("Highlight", container)
-	
-	self.connection = runService.RenderStepped:Connect(function()
-		self:Update()
-	end)
-	return self
-end
-
-function EspObject:Update()
-	local char = self.player.Character
-	local interface = self.interface
-	local options = interface.teamSettings[interface.isFriendly(self.player) and "friendly" or "enemy"]
-	
-	if not (options.enabled and char and char:FindFirstChild("HumanoidRootPart")) then
-		for _, d in next, self.drawings do d.Visible = false end
-		self.highlight.Enabled = false
-		return
-	end
-
-	local root = char.HumanoidRootPart
-	local screenPoint, onScreen = wtvp(camera, root.Position)
-	local depth = screenPoint.Z
-	
-	if interface.sharedSettings.limitDistance and depth > interface.sharedSettings.maxDistance then
-		onScreen = false
-	end
-
-	self.highlight.Enabled = options.chams
-	if options.chams then
-		self.highlight.Adornee = char
-		self.highlight.FillColor = options.chamsFillColor[1] or Color3.new(1,1,1)
-		self.highlight.FillTransparency = options.chamsFillColor[2] or 0.5
-		self.highlight.OutlineColor = options.chamsOutlineColor[1] or Color3.new(1,1,1)
-	end
-
-	if onScreen and depth > 0 then
-		local size = Vector2.new(2000 / depth, 2000 / depth)
-		local tl = Vector2.new(screenPoint.X - size.X / 2, screenPoint.Y - size.Y / 2)
-		
-		local box = self.drawings.box
-		box.Visible = options.box
-		box.Position = tl
-		box.Size = size
-		box.Color = options.boxColor[1] or Color3.new(1,1,1)
-		box.Transparency = options.boxColor[2] or 1
-
-		local nm = self.drawings.name
-		nm.Visible = options.name
-		nm.Text = self.player.Name
-		nm.Position = Vector2.new(screenPoint.X, tl.Y - 15)
-		nm.Center = true
-		nm.Outline = true
-		nm.Color = options.nameColor[1] or Color3.new(1,1,1)
-
-		local dist = self.drawings.distance
-		dist.Visible = options.distance
-		dist.Text = "[" .. round(depth) .. "m]"
-		dist.Position = Vector2.new(screenPoint.X, tl.Y + size.Y + 5)
-		dist.Center = true
-		dist.Outline = true
-		dist.Color = options.distanceColor[1] or Color3.new(1,1,1)
-
-		local hb = self.drawings.healthBar
-		hb.Visible = options.healthBar
-		local hum = findFirstChildOfClass(char, "Humanoid")
-		if hum then
-			local healthPercent = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
-			hb.From = Vector2.new(tl.X - 5, tl.Y + size.Y)
-			hb.To = Vector2.new(tl.X - 5, tl.Y + size.Y - (size.Y * healthPercent))
-			hb.Color = Color3.fromRGB(255, 0, 0):Lerp(Color3.fromRGB(0, 255, 0), healthPercent)
-			hb.Thickness = 2
-		end
-
-		local tr = self.drawings.tracer
-		tr.Visible = options.tracer
-		tr.From = Vector2.new(viewportSize.X / 2, viewportSize.Y)
-		tr.To = Vector2.new(screenPoint.X, screenPoint.Y)
-		tr.Color = options.tracerColor[1] or Color3.new(1,1,1)
-	else
-		for _, d in next, self.drawings do d.Visible = false end
-	end
-end
-
-function EspObject:Destruct()
-	self.connection:Disconnect()
-	for _, d in next, self.drawings do d:Remove() end
-	self.highlight:Destroy()
 end
 
 local EspInterface = {
@@ -125,34 +26,206 @@ local EspInterface = {
 	sharedSettings = { limitDistance = false, maxDistance = 500 },
 	teamSettings = {
 		enemy = {
-			enabled = true, box = true, boxColor = {Color3.fromRGB(255, 0, 0), 1},
-			name = true, nameColor = {Color3.fromRGB(255, 255, 255), 1},
-			distance = true, distanceColor = {Color3.fromRGB(255, 255, 255), 1},
-			healthBar = true, tracer = false, tracerColor = {Color3.fromRGB(255, 0, 0), 1},
-			chams = true, chamsFillColor = {Color3.fromRGB(255, 0, 0), 0.5}, chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0}
+			enabled = true, box = true,
+			name = true, distance = true,
+			healthBar = true, tracer = false,
+			chams = false -- Disabled by default
 		},
 		friendly = {
-			enabled = false, box = true, boxColor = {Color3.fromRGB(0, 255, 0), 1},
-			name = true, nameColor = {Color3.fromRGB(255, 255, 255), 1},
-			distance = true, distanceColor = {Color3.fromRGB(255, 255, 255), 1},
-			healthBar = true, tracer = false, tracerColor = {Color3.fromRGB(0, 255, 0), 1},
-			chams = false, chamsFillColor = {Color3.fromRGB(0, 255, 0), 0.5}, chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0}
+			enabled = false, box = true,
+			name = true, distance = true,
+			healthBar = true, tracer = false,
+			chams = false -- Disabled by default
 		}
 	}
 }
 
+-- Team / Color Logic
 function EspInterface.isFriendly(player)
-	if localPlayer.Team == nil then 
-		return false -- If the game doesn't use teams, treat everyone as an enemy
-	end
+	if localPlayer.Team == nil then return false end
 	return player.Team == localPlayer.Team
 end
 
-function EspInterface.Load()
-	local function add(p)
-		if p ~= localPlayer then EspInterface._objectCache[p] = EspObject.new(p, EspInterface) end
+local function getPlayerColor(player)
+	-- If the game has no teams, or the target has no team, make them grey
+	if not localPlayer.Team or not player.Team then
+		return Color3.fromRGB(150, 150, 150)
 	end
-	for _, p in next, players:GetPlayers() do add(p) end
+	-- Otherwise, use their team color
+	return player.TeamColor.Color
+end
+
+local EspObject = {}
+EspObject.__index = EspObject
+
+function EspObject.new(player)
+	local self = setmetatable({}, EspObject)
+	self.player = player
+	
+	self.drawings = {
+		box = createSafeDrawing("Square"),
+		name = createSafeDrawing("Text"),
+		distance = createSafeDrawing("Text"),
+		healthBarBg = createSafeDrawing("Line"), -- Added a background for the health bar
+		healthBar = createSafeDrawing("Line"),
+		tracer = createSafeDrawing("Line")
+	}
+
+	self.highlight = Instance.new("Highlight")
+	self.highlight.Parent = container
+
+	return self
+end
+
+function EspObject:Update()
+	local interface = EspInterface
+	local isFriend = interface.isFriendly(self.player)
+	local options = interface.teamSettings[isFriend and "friendly" or "enemy"]
+	
+	local char = self.player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local head = char and char:FindFirstChild("Head")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	
+	-- Hide if missing parts, dead, or disabled
+	if not (options.enabled and char and root and head and hum and hum.Health > 0) then
+		self:Hide()
+		return
+	end
+
+	local rootPos, onScreen = camera:WorldToViewportPoint(root.Position)
+	local depth = rootPos.Z
+	
+	if interface.sharedSettings.limitDistance and depth > interface.sharedSettings.maxDistance then
+		self:Hide()
+		return
+	end
+
+	local pColor = getPlayerColor(self.player)
+
+	-- Update Chams
+	self.highlight.Enabled = options.chams
+	if options.chams then
+		self.highlight.Adornee = char
+		self.highlight.FillColor = pColor
+		self.highlight.FillTransparency = 0.5
+		self.highlight.OutlineColor = Color3.new(1, 1, 1)
+	end
+
+	if onScreen and depth > 0 then
+		-- Perfectly scale the box based on Head and Feet positions
+		local headPos = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+		local legPos = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
+		
+		local height = math.abs(headPos.Y - legPos.Y)
+		local width = height / 1.5
+		local tl = Vector2.new(rootPos.X - width / 2, headPos.Y)
+		
+		local d = self.drawings
+
+		-- Box
+		if options.box then
+			d.box.Visible = true
+			d.box.Position = tl
+			d.box.Size = Vector2.new(width, height)
+			d.box.Color = pColor
+			d.box.Thickness = 1
+			d.box.Filled = false
+			d.box.Transparency = 1
+		else
+			d.box.Visible = false
+		end
+
+		-- Name (Positioned above the actual head)
+		if options.name then
+			d.name.Visible = true
+			d.name.Text = self.player.Name
+			d.name.Position = Vector2.new(rootPos.X, headPos.Y - 18)
+			d.name.Center = true
+			d.name.Outline = true
+			d.name.Color = pColor
+			d.name.Size = 16
+		else
+			d.name.Visible = false
+		end
+
+		-- Distance (Positioned below the feet)
+		if options.distance then
+			d.distance.Visible = true
+			d.distance.Text = "[" .. floor(depth) .. "m]"
+			d.distance.Position = Vector2.new(rootPos.X, legPos.Y + 2)
+			d.distance.Center = true
+			d.distance.Outline = true
+			d.distance.Color = pColor
+			d.distance.Size = 14
+		else
+			d.distance.Visible = false
+		end
+
+		-- Health Bar
+		if options.healthBar then
+			local healthPercent = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+			local barHeight = height * healthPercent
+			local barX = tl.X - 5
+
+			-- Background (Black outline)
+			d.healthBarBg.Visible = true
+			d.healthBarBg.From = Vector2.new(barX, headPos.Y)
+			d.healthBarBg.To = Vector2.new(barX, legPos.Y)
+			d.healthBarBg.Color = Color3.new(0, 0, 0)
+			d.healthBarBg.Thickness = 3
+
+			-- Actual Health (Red to Green gradient)
+			d.healthBar.Visible = true
+			d.healthBar.From = Vector2.new(barX, legPos.Y)
+			d.healthBar.To = Vector2.new(barX, legPos.Y - barHeight)
+			d.healthBar.Color = Color3.fromRGB(255, 0, 0):Lerp(Color3.fromRGB(0, 255, 0), healthPercent)
+			d.healthBar.Thickness = 1
+		else
+			d.healthBar.Visible = false
+			d.healthBarBg.Visible = false
+		end
+
+		-- Tracer
+		if options.tracer then
+			d.tracer.Visible = true
+			d.tracer.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
+			d.tracer.To = Vector2.new(rootPos.X, rootPos.Y)
+			d.tracer.Color = pColor
+			d.tracer.Thickness = 1
+		else
+			d.tracer.Visible = false
+		end
+	else
+		self:Hide(true) -- Hide UI, but keep chams running
+	end
+end
+
+function EspObject:Hide(drawingsOnly)
+	for _, d in pairs(self.drawings) do d.Visible = false end
+	if not drawingsOnly then
+		self.highlight.Enabled = false
+	end
+end
+
+function EspObject:Destruct()
+	self:Hide()
+	for _, d in pairs(self.drawings) do
+		if type(d) == "table" and d.Remove then pcall(function() d:Remove() end) end
+	end
+	if self.highlight then self.highlight:Destroy() end
+end
+
+function EspInterface.Load()
+	camera = workspace.CurrentCamera
+
+	local function add(p)
+		if p ~= localPlayer and not EspInterface._objectCache[p] then
+			EspInterface._objectCache[p] = EspObject.new(p)
+		end
+	end
+
+	for _, p in pairs(players:GetPlayers()) do add(p) end
 	EspInterface.added = players.PlayerAdded:Connect(add)
 	EspInterface.removed = players.PlayerRemoving:Connect(function(p)
 		if EspInterface._objectCache[p] then
@@ -160,12 +233,22 @@ function EspInterface.Load()
 			EspInterface._objectCache[p] = nil
 		end
 	end)
+
+	-- Single RenderStepped loop for ALL players (Huge performance boost)
+	EspInterface.loop = runService.RenderStepped:Connect(function()
+		camera = workspace.CurrentCamera -- Constantly update in case of respawn/cutscene
+		for _, obj in pairs(EspInterface._objectCache) do
+			obj:Update()
+		end
+	end)
 end
 
 function EspInterface.Unload()
 	if EspInterface.added then EspInterface.added:Disconnect() EspInterface.added = nil end
 	if EspInterface.removed then EspInterface.removed:Disconnect() EspInterface.removed = nil end
-	for p, obj in next, EspInterface._objectCache do
+	if EspInterface.loop then EspInterface.loop:Disconnect() EspInterface.loop = nil end
+	
+	for p, obj in pairs(EspInterface._objectCache) do
 		obj:Destruct()
 		EspInterface._objectCache[p] = nil
 	end
