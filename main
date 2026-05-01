@@ -125,7 +125,8 @@ local function createSafeDrawing(class)
 				return function() pcall(function() drawing:Remove() end) end
 			end
 			local s, v = pcall(function() return drawing[key] end)
-			if not s then
+			-- Ensure 'v' isn't nil for properties that demand a value (like TextBounds)
+			if not s or v == nil then
 				if key == "TextBounds" then return Vector2.zero end
 				return nil
 			end
@@ -152,6 +153,8 @@ end
 function EspObject:Construct()
 	self.charCache = {};
 	self.childCount = 0;
+	self.isRenderable = false;
+	self.direction = Vector2.zero;
 	self.bin = {};
 	self.drawings = {
 		box3d = {
@@ -195,7 +198,8 @@ function EspObject:Construct()
 		}
 	};
 
-	self.renderConnection = runService.Heartbeat:Connect(function(deltaTime)
+	-- RenderStepped is much smoother for UI elements than Heartbeat
+	self.renderConnection = runService.RenderStepped:Connect(function(deltaTime)
 		self:Update(deltaTime);
 		self:Render(deltaTime);
 	end);
@@ -232,8 +236,11 @@ function EspObject:Update()
 
 	local head = self.enabled and findFirstChild(self.character, "Head");
 	if not head then
+		self.isRenderable = false;
 		return;
 	end
+	
+	self.isRenderable = true;
 
 	local _, onScreen, depth = worldToScreen(head.Position);
 	self.onScreen = onScreen;
@@ -272,7 +279,7 @@ end
 
 function EspObject:Render()
 	local onScreen = self.onScreen or false;
-	local enabled = self.enabled or false;
+	local enabled = (self.enabled and self.isRenderable) or false;
 	local visible = self.drawings.visible;
 	local hidden = self.drawings.hidden;
 	local box3d = self.drawings.box3d;
@@ -514,7 +521,7 @@ function InstanceObject:Construct()
 	self.text = createSafeDrawing("Text");
 	self.text.Center = true;
 
-	self.renderConnection = runService.Heartbeat:Connect(function(deltaTime)
+	self.renderConnection = runService.RenderStepped:Connect(function(deltaTime)
 		self:Render(deltaTime);
 	end);
 end
