@@ -23,7 +23,7 @@ local function createDrawing(class)
 		local success, obj = pcall(Drawing.new, class)
 		if success then return obj end
 	end
-	
+
 	local obj = {Visible = false, Color = Color3.new(1,1,1), Transparency = 1, ZIndex = 1}
 	if class == "Line" then
 		local frame = Instance.new("Frame")
@@ -50,30 +50,6 @@ local function createDrawing(class)
 				frame.Size = UDim2.fromOffset(dir.Magnitude, v)
 			end
 		end})
-	elseif class == "Text" then
-		local label = Instance.new("TextLabel")
-		label.BackgroundTransparency = 1
-		label.Font = Enum.Font.Code
-		label.TextSize = 13
-		label.Parent = gui
-		local stroke = Instance.new("UIStroke")
-		stroke.Parent = label
-		obj.Instance = label
-		obj.Text = ""
-		obj.Position = Vector2.new()
-		obj.Center = false
-		obj.Outline = false
-		setmetatable(obj, {__newindex = function(t, k, v)
-			rawset(t, k, v)
-			if k == "Visible" then label.Visible = v
-			elseif k == "Text" then label.Text = v
-			elseif k == "Color" then label.TextColor3 = v
-			elseif k == "Transparency" then label.TextTransparency = 1 - v
-			elseif k == "Position" then label.Position = UDim2.fromOffset(v.X, v.Y)
-			elseif k == "Center" then label.AnchorPoint = v and Vector2.new(0.5, 0) or Vector2.new(0, 0)
-			elseif k == "Outline" then stroke.Enabled = v
-			end
-		end})
 	elseif class == "Square" then
 		local frame = Instance.new("Frame")
 		frame.BackgroundTransparency = 1
@@ -93,11 +69,53 @@ local function createDrawing(class)
 			end
 		end})
 	end
-	
+
 	obj.Remove = function(self)
 		if self.Instance then self.Instance:Destroy() end
 	end
 	return obj
+end
+
+-- BillboardGui for name + distance.
+-- Attaches directly to the player's head in 3D world space (same as Highlight),
+-- so it never needs WorldToViewportPoint and always positions correctly.
+local function createBillboard()
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "ESPBillboard"
+	bb.AlwaysOnTop = true
+	bb.Size = UDim2.fromOffset(200, 40)
+	bb.StudsOffset = Vector3.new(0, 3.2, 0)
+	bb.ResetOnSpawn = false
+	bb.Enabled = false
+	bb.Parent = coreGui
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "NameLabel"
+	nameLabel.AnchorPoint = Vector2.new(0.5, 1)
+	nameLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+	nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Font = Enum.Font.Code
+	nameLabel.TextSize = 13
+	nameLabel.TextColor3 = Color3.new(1, 1, 1)
+	nameLabel.TextStrokeTransparency = 0
+	nameLabel.Text = ""
+	nameLabel.Parent = bb
+
+	local distLabel = Instance.new("TextLabel")
+	distLabel.Name = "DistLabel"
+	distLabel.AnchorPoint = Vector2.new(0.5, 0)
+	distLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+	distLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	distLabel.BackgroundTransparency = 1
+	distLabel.Font = Enum.Font.Code
+	distLabel.TextSize = 11
+	distLabel.TextColor3 = Color3.new(1, 1, 1)
+	distLabel.TextStrokeTransparency = 0
+	distLabel.Text = ""
+	distLabel.Parent = bb
+
+	return bb, nameLabel, distLabel
 end
 
 local EspInterface = {
@@ -125,7 +143,7 @@ local function getTeamColor(player, optionsColor)
 	if not localPlayer.Team or not player.Team or #teams:GetChildren() == 0 then
 		return Color3.fromRGB(150, 150, 150)
 	end
-	return optionsColor[1] or Color3.new(1,1,1)
+	return optionsColor[1] or Color3.new(1, 1, 1)
 end
 
 local function getEspState(player)
@@ -151,14 +169,17 @@ end
 local function createEsp(player)
 	if isLocalPlayer(player) then return end
 
+	local billboard, nameLabel, distLabel = createBillboard()
+
 	local obj = {
 		player = player,
+		billboard = billboard,
+		nameLabel = nameLabel,
+		distLabel = distLabel,
 		drawings = {
-			box = createDrawing("Square"),
-			name = createDrawing("Text"),
-			distance = createDrawing("Text"),
-			healthBar = createDrawing("Line"),
-			tracer = createDrawing("Line")
+			box        = createDrawing("Square"),
+			healthBar  = createDrawing("Line"),
+			tracer     = createDrawing("Line")
 		},
 		highlight = Instance.new("Highlight")
 	}
@@ -171,6 +192,7 @@ local function removeEsp(player)
 	if obj then
 		for _, d in next, obj.drawings do d:Remove() end
 		obj.highlight:Destroy()
+		obj.billboard:Destroy()
 		EspInterface._cache[player] = nil
 	end
 end
@@ -179,64 +201,78 @@ local function updateEsp()
 	camera = workspace.CurrentCamera
 	local viewportSize = camera.ViewportSize
 
-	-- Actively purge local player from cache every frame in case they slipped in
-	-- during executor load before LocalPlayer was available
+	-- Purge local player every frame (handles executor timing issues)
 	local lp = players.LocalPlayer
-	if lp and EspInterface._cache[lp] then
-		removeEsp(lp)
-	end
-	-- Also purge by UserId as a fallback (executor may give different object refs)
+	if lp and EspInterface._cache[lp] then removeEsp(lp) end
 	if lp then
 		for player in next, EspInterface._cache do
-			if player.UserId == lp.UserId then
-				removeEsp(player)
-				break
-			end
+			if player.UserId == lp.UserId then removeEsp(player) break end
 		end
 	end
 
 	for player, obj in next, EspInterface._cache do
-
 		local char = player.Character
 		local options = getEspState(player)
 
-		if not (options.enabled and char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Head") and player.Parent) then
+		if not (options.enabled and char
+			and char:FindFirstChild("HumanoidRootPart")
+			and char:FindFirstChild("Head")
+			and player.Parent) then
 			for _, d in next, obj.drawings do d.Visible = false end
 			obj.highlight.Enabled = false
+			obj.billboard.Enabled = false
 			continue
 		end
 
 		local root = char.HumanoidRootPart
 		local head = char.Head
-		local hum = char:FindFirstChildOfClass("Humanoid")
-		
+		local hum  = char:FindFirstChildOfClass("Humanoid")
+
 		if not hum or hum.Health <= 0 then
 			for _, d in next, obj.drawings do d.Visible = false end
 			obj.highlight.Enabled = false
+			obj.billboard.Enabled = false
 			continue
 		end
 
+		-- Only WorldToViewportPoint call left — used for box/tracer/healthbar and depth
 		local screenPoint, onScreen = camera:WorldToViewportPoint(root.Position)
-		-- headPoint: use the top of the head so name floats clearly above it
-		local headPoint = camera:WorldToViewportPoint(head.Position + Vector3.new(0, head.Size.Y / 2 + 0.1, 0))
 		local depth = screenPoint.Z
 
 		if EspInterface.shared.limitDistance and depth > EspInterface.shared.maxDistance then
 			onScreen = false
 		end
 
+		-- Chams (Highlight is 3D, always correct)
 		obj.highlight.Enabled = options.chams
 		if options.chams then
 			obj.highlight.Adornee = char
 			obj.highlight.FillColor = getTeamColor(player, options.chamsFillColor)
 			obj.highlight.FillTransparency = options.chamsFillColor[2] or 0.5
-			obj.highlight.OutlineColor = options.chamsOutlineColor[1] or Color3.new(1,1,1)
+			obj.highlight.OutlineColor = options.chamsOutlineColor[1] or Color3.new(1, 1, 1)
 		end
 
+		-- Name + Distance via BillboardGui (3D world object, attaches to head directly)
+		local showLabels = onScreen and depth > 0
+		obj.billboard.Enabled = showLabels and (options.name or options.distance)
+		if showLabels then
+			obj.billboard.Adornee = head
+
+			obj.nameLabel.Visible = options.name
+			obj.nameLabel.Text = options.name and player.Name or ""
+			obj.nameLabel.TextColor3 = getTeamColor(player, options.nameColor)
+
+			obj.distLabel.Visible = options.distance
+			obj.distLabel.Text = options.distance and ("[" .. math.round(depth) .. "m]") or ""
+			obj.distLabel.TextColor3 = getTeamColor(player, options.distanceColor)
+		end
+
+		-- Box, health bar, tracer (2D screen-space)
 		if onScreen and depth > 0 then
+			local headPoint = camera:WorldToViewportPoint(head.Position + Vector3.new(0, head.Size.Y / 2, 0))
 			local height = math.abs(headPoint.Y - screenPoint.Y) * 2.2
-			local width = height * 0.65
-			local tl = Vector2.new(screenPoint.X - width / 2, screenPoint.Y - height / 2)
+			local width  = height * 0.65
+			local tl     = Vector2.new(screenPoint.X - width / 2, screenPoint.Y - height / 2)
 
 			local box = obj.drawings.box
 			box.Visible = options.box
@@ -245,37 +281,18 @@ local function updateEsp()
 			box.Color = getTeamColor(player, options.boxColor)
 			box.Transparency = options.boxColor[2] or 1
 
-			-- FIX: anchor name to headPoint.Y so it floats above the actual head,
-			-- not at the box top which sits at/inside the head
-			local nm = obj.drawings.name
-			nm.Visible = options.name
-			nm.Text = player.Name
-			nm.Position = Vector2.new(screenPoint.X, headPoint.Y - 18)
-			nm.Center = true
-			nm.Outline = true
-			nm.Color = getTeamColor(player, options.nameColor)
-
-			-- FIX: distance goes below the box, not in the head
-			local dist = obj.drawings.distance
-			dist.Visible = options.distance
-			dist.Text = "[" .. math.round(depth) .. "m]"
-			dist.Position = Vector2.new(screenPoint.X, tl.Y + height + 4)
-			dist.Center = true
-			dist.Outline = true
-			dist.Color = getTeamColor(player, options.distanceColor)
-
 			local hb = obj.drawings.healthBar
 			hb.Visible = options.healthBar
-			local healthPercent = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+			local hp = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
 			hb.From = Vector2.new(tl.X - 6, tl.Y + height)
-			hb.To = Vector2.new(tl.X - 6, tl.Y + height - (height * healthPercent))
-			hb.Color = Color3.fromRGB(255, 0, 0):Lerp(Color3.fromRGB(0, 255, 0), healthPercent)
+			hb.To   = Vector2.new(tl.X - 6, tl.Y + height - (height * hp))
+			hb.Color = Color3.fromRGB(255, 0, 0):Lerp(Color3.fromRGB(0, 255, 0), hp)
 			hb.Thickness = 2
 
 			local tr = obj.drawings.tracer
 			tr.Visible = options.tracer
-			tr.From = Vector2.new(viewportSize.X / 2, viewportSize.Y)
-			tr.To = Vector2.new(screenPoint.X, screenPoint.Y)
+			tr.From  = Vector2.new(viewportSize.X / 2, viewportSize.Y)
+			tr.To    = Vector2.new(screenPoint.X, screenPoint.Y)
 			tr.Color = getTeamColor(player, options.tracerColor)
 		else
 			for _, d in next, obj.drawings do d.Visible = false end
@@ -285,15 +302,15 @@ end
 
 function EspInterface.Load()
 	for _, p in next, players:GetPlayers() do createEsp(p) end
-	EspInterface.added = players.PlayerAdded:Connect(createEsp)
+	EspInterface.added   = players.PlayerAdded:Connect(createEsp)
 	EspInterface.removed = players.PlayerRemoving:Connect(removeEsp)
-	EspInterface.loop = runService.RenderStepped:Connect(updateEsp)
+	EspInterface.loop    = runService.RenderStepped:Connect(updateEsp)
 end
 
 function EspInterface.Unload()
-	if EspInterface.added then EspInterface.added:Disconnect() end
+	if EspInterface.added   then EspInterface.added:Disconnect() end
 	if EspInterface.removed then EspInterface.removed:Disconnect() end
-	if EspInterface.loop then EspInterface.loop:Disconnect() end
+	if EspInterface.loop    then EspInterface.loop:Disconnect() end
 	for p in next, EspInterface._cache do removeEsp(p) end
 	highlightContainer:ClearAllChildren()
 	gui:Destroy()
