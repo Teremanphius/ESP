@@ -259,7 +259,7 @@ local function updateEsp()
 			obj.billboard.Adornee = head
 
 			obj.nameLabel.Visible = options.name
-			obj.nameLabel.Text = options.name and player.DisplayName .. " (" .. player.Name .. ")"
+			obj.nameLabel.Text = options.name and (player.DisplayName .. " (" .. player.Name .. ")") or ""
 			obj.nameLabel.TextColor3 = getTeamColor(player, options.nameColor)
 
 			obj.distLabel.Visible = options.distance
