@@ -1,11 +1,30 @@
-local runService = game:GetService("RunService")
-local players = game:GetService("Players")
-local workspace = game:GetService("Workspace")
-local teams = game:GetService("Teams")
-local coreGui = gethui and gethui() or game:GetService("CoreGui")
+-- Localize globals used in the hot path to avoid repeated _ENV lookups
+local runService  = game:GetService("RunService")
+local players     = game:GetService("Players")
+local workspace   = game:GetService("Workspace")
+local teams       = game:GetService("Teams")
+local coreGui     = gethui and gethui() or game:GetService("CoreGui")
 
 local localPlayer = players.LocalPlayer
-local camera = workspace.CurrentCamera
+local camera      = workspace.CurrentCamera
+
+-- Math / constructor locals (avoids global table lookup every call in updateEsp)
+local mathAbs     = math.abs
+local mathClamp   = math.clamp
+local mathRound   = math.round
+local mathDeg     = math.deg
+local mathAtan2   = math.atan2
+local tickFn      = tick
+local v2New       = Vector2.new
+local v3New       = Vector3.new
+local c3HSV       = Color3.fromHSV
+local c3RGB       = Color3.fromRGB
+local udim2Off    = UDim2.fromOffset
+
+-- Pre-baked constants re-used every frame
+local HP_RED      = c3RGB(255, 0, 0)
+local HP_GREEN    = c3RGB(0, 255, 0)
+local WHITE       = Color3.new(1, 1, 1)
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "ESPGui"
@@ -24,15 +43,15 @@ local function createDrawing(class)
 		if success then return obj end
 	end
 
-	local obj = {Visible = false, Color = Color3.new(1,1,1), Transparency = 1, ZIndex = 1}
+	local obj = {Visible = false, Color = WHITE, Transparency = 1, ZIndex = 1}
 	if class == "Line" then
 		local frame = Instance.new("Frame")
-		frame.AnchorPoint = Vector2.new(0.5, 0.5)
+		frame.AnchorPoint = v2New(0.5, 0.5)
 		frame.BorderSizePixel = 0
 		frame.Parent = gui
-		obj.Instance = frame
-		obj.From = Vector2.new()
-		obj.To = Vector2.new()
+		obj.Instance  = frame
+		obj.From      = v2New()
+		obj.To        = v2New()
 		obj.Thickness = 1
 		setmetatable(obj, {__newindex = function(t, k, v)
 			rawset(t, k, v)
@@ -40,14 +59,14 @@ local function createDrawing(class)
 			elseif k == "Color" then frame.BackgroundColor3 = v
 			elseif k == "Transparency" then frame.BackgroundTransparency = 1 - v
 			elseif k == "From" or k == "To" then
-				local dir = t.To - t.From
+				local dir    = t.To - t.From
 				local center = (t.To + t.From) / 2
-				frame.Position = UDim2.fromOffset(center.X, center.Y)
-				frame.Size = UDim2.fromOffset(dir.Magnitude, t.Thickness)
-				frame.Rotation = math.deg(math.atan2(dir.Y, dir.X))
+				frame.Position = udim2Off(center.X, center.Y)
+				frame.Size     = udim2Off(dir.Magnitude, t.Thickness)
+				frame.Rotation = mathDeg(mathAtan2(dir.Y, dir.X))
 			elseif k == "Thickness" then
 				local dir = t.To - t.From
-				frame.Size = UDim2.fromOffset(dir.Magnitude, v)
+				frame.Size = udim2Off(dir.Magnitude, v)
 			end
 		end})
 	elseif class == "Square" then
@@ -57,15 +76,15 @@ local function createDrawing(class)
 		local stroke = Instance.new("UIStroke")
 		stroke.Parent = frame
 		obj.Instance = frame
-		obj.Size = Vector2.new()
-		obj.Position = Vector2.new()
+		obj.Size     = v2New()
+		obj.Position = v2New()
 		setmetatable(obj, {__newindex = function(t, k, v)
 			rawset(t, k, v)
 			if k == "Visible" then frame.Visible = v
 			elseif k == "Color" then stroke.Color = v
 			elseif k == "Transparency" then stroke.Transparency = 1 - v
-			elseif k == "Size" then frame.Size = UDim2.fromOffset(v.X, v.Y)
-			elseif k == "Position" then frame.Position = UDim2.fromOffset(v.X, v.Y)
+			elseif k == "Size" then frame.Size = udim2Off(v.X, v.Y)
+			elseif k == "Position" then frame.Position = udim2Off(v.X, v.Y)
 			end
 		end})
 	end
@@ -78,39 +97,39 @@ end
 
 local function createBillboard()
 	local bb = Instance.new("BillboardGui")
-	bb.Name = "ESPBillboard"
-	bb.AlwaysOnTop = true
-	bb.Size = UDim2.fromOffset(200, 40)
-	bb.StudsOffset = Vector3.new(0, 3.2, 0)
-	bb.ResetOnSpawn = false
-	bb.Enabled = false
-	bb.Parent = coreGui
+	bb.Name          = "ESPBillboard"
+	bb.AlwaysOnTop   = true
+	bb.Size          = UDim2.fromOffset(200, 40)
+	bb.StudsOffset   = v3New(0, 3.2, 0)
+	bb.ResetOnSpawn  = false
+	bb.Enabled       = false
+	bb.Parent        = coreGui
 
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Name = "NameLabel"
-	nameLabel.AnchorPoint = Vector2.new(0.5, 1)
-	nameLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
-	nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	nameLabel.Name                  = "NameLabel"
+	nameLabel.AnchorPoint           = v2New(0.5, 1)
+	nameLabel.Position              = UDim2.new(0.5, 0, 0.5, 0)
+	nameLabel.Size                  = UDim2.new(1, 0, 0.5, 0)
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Font = Enum.Font.Code
-	nameLabel.TextSize = 13
-	nameLabel.TextColor3 = Color3.new(1, 1, 1)
+	nameLabel.Font                  = Enum.Font.Code
+	nameLabel.TextSize              = 13
+	nameLabel.TextColor3            = WHITE
 	nameLabel.TextStrokeTransparency = 0
-	nameLabel.Text = ""
-	nameLabel.Parent = bb
+	nameLabel.Text                  = ""
+	nameLabel.Parent                = bb
 
 	local distLabel = Instance.new("TextLabel")
-	distLabel.Name = "DistLabel"
-	distLabel.AnchorPoint = Vector2.new(0.5, 0)
-	distLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
-	distLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	distLabel.Name                  = "DistLabel"
+	distLabel.AnchorPoint           = v2New(0.5, 0)
+	distLabel.Position              = UDim2.new(0.5, 0, 0.5, 0)
+	distLabel.Size                  = UDim2.new(1, 0, 0.5, 0)
 	distLabel.BackgroundTransparency = 1
-	distLabel.Font = Enum.Font.Code
-	distLabel.TextSize = 11
-	distLabel.TextColor3 = Color3.new(1, 1, 1)
+	distLabel.Font                  = Enum.Font.Code
+	distLabel.TextSize              = 11
+	distLabel.TextColor3            = WHITE
 	distLabel.TextStrokeTransparency = 0
-	distLabel.Text = ""
-	distLabel.Parent = bb
+	distLabel.Text                  = ""
+	distLabel.Parent                = bb
 
 	return bb, nameLabel, distLabel
 end
@@ -123,15 +142,10 @@ local RAINBOW_OFFSETS = {
 	chams    = 0.60,
 }
 
-local function getRainbowColor()
-	local s = EspInterface.shared
-	local hue = (tick() * s.rainbowSpeed) % 1
-	return Color3.fromHSV(hue, s.rainbowSaturation, 1)
-end
-
+-- EspInterface declared before helper functions that reference it
 local EspInterface = {
 	_cache = {},
-		shared = {
+	shared = {
 		limitDistance     = false,
 		maxDistance       = 500,
 		rainbowSpeed      = 0.5,
@@ -147,91 +161,75 @@ local EspInterface = {
 	teams = {
 		enemy = {
 			enabled = false,
-			box = true,        boxColor = {Color3.fromRGB(255, 0, 0), 1},
-			name = true,       nameColor = {Color3.fromRGB(255, 255, 255), 1},
-			distance = true,   distanceColor = {Color3.fromRGB(255, 255, 255), 1},
+			box = true,        boxColor = {c3RGB(255, 0, 0), 1},
+			name = true,       nameColor = {c3RGB(255, 255, 255), 1},
+			distance = true,   distanceColor = {c3RGB(255, 255, 255), 1},
 			healthBar = true,
-			tracer = false,    tracerColor = {Color3.fromRGB(255, 0, 0), 1},
+			tracer = false,    tracerColor = {c3RGB(255, 0, 0), 1},
 			chams = true,
-			chamsFillColor = {Color3.fromRGB(255, 0, 0), 0.5},
-			chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0},
+			chamsFillColor = {c3RGB(255, 0, 0), 0.5},
+			chamsOutlineColor = {c3RGB(255, 255, 255), 0},
 		},
 		friendly = {
 			enabled = false,
-			box = true,        boxColor = {Color3.fromRGB(0, 255, 0), 1},
-			name = true,       nameColor = {Color3.fromRGB(255, 255, 255), 1},
-			distance = true,   distanceColor = {Color3.fromRGB(255, 255, 255), 1},
+			box = true,        boxColor = {c3RGB(0, 255, 0), 1},
+			name = true,       nameColor = {c3RGB(255, 255, 255), 1},
+			distance = true,   distanceColor = {c3RGB(255, 255, 255), 1},
 			healthBar = true,
-			tracer = false,    tracerColor = {Color3.fromRGB(0, 255, 0), 1},
+			tracer = false,    tracerColor = {c3RGB(0, 255, 0), 1},
 			chams = false,
-			chamsFillColor = {Color3.fromRGB(0, 255, 0), 0.5},
-			chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0},
+			chamsFillColor = {c3RGB(0, 255, 0), 0.5},
+			chamsOutlineColor = {c3RGB(255, 255, 255), 0},
 		},
 		neutral = {
 			enabled = true,
-			box = true,        boxColor = {Color3.fromRGB(150, 150, 150), 1},
-			name = true,       nameColor = {Color3.fromRGB(255, 255, 255), 1},
-			distance = true,   distanceColor = {Color3.fromRGB(255, 255, 255), 1},
+			box = true,        boxColor = {c3RGB(150, 150, 150), 1},
+			name = true,       nameColor = {c3RGB(255, 255, 255), 1},
+			distance = true,   distanceColor = {c3RGB(255, 255, 255), 1},
 			healthBar = true,
-			tracer = false,    tracerColor = {Color3.fromRGB(150, 150, 150), 1},
+			tracer = false,    tracerColor = {c3RGB(150, 150, 150), 1},
 			chams = false,
-			chamsFillColor = {Color3.fromRGB(150, 150, 150), 0.5},
-			chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0},
+			chamsFillColor = {c3RGB(150, 150, 150), 0.5},
+			chamsOutlineColor = {c3RGB(255, 255, 255), 0},
 		},
 	},
 }
 
+-- Single definition, after EspInterface exists
 local function getRainbowColor()
 	local s = EspInterface.shared
-	local hue = (tick() * s.rainbowSpeed) % 1
-	return Color3.fromHSV(hue, s.rainbowSaturation, 1)
+	return c3HSV((tickFn() * s.rainbowSpeed) % 1, s.rainbowSaturation, 1)
 end
 
-local function resolveFeatureColor(options, colorKey, featureKey)
-	if EspInterface.shared.rainbow[featureKey] then
+local function resolveFeatureColor(rainbow, options, colorKey, featureKey)
+	-- `rainbow` is pre-fetched by the caller to avoid repeated shared.rainbow lookups
+	if rainbow[featureKey] then
 		return getRainbowColor()
 	end
-	local colorTable = options[colorKey]
-	return colorTable and colorTable[1] or Color3.new(1, 1, 1)
+	local ct = options[colorKey]
+	return ct and ct[1] or WHITE
 end
 
-local function getTeamColor(player, optionsColor)
-	if not localPlayer.Team or not player.Team or #teams:GetChildren() == 0 then
-		return optionsColor[1] or Color3.fromRGB(150, 150, 150)
-	end
-	return optionsColor[1] or Color3.new(1, 1, 1)
-end
-
+-- Uses FindFirstChildOfClass instead of #GetChildren() which allocates a table
 local function getEspState(player)
-	if not localPlayer.Team or not player.Team or #teams:GetChildren() == 0 then
+	if not localPlayer.Team or not player.Team
+		or not teams:FindFirstChildOfClass("Team") then
 		return EspInterface.teams.neutral
 	end
 	return EspInterface.teams[player.Team == localPlayer.Team and "friendly" or "enemy"]
 end
 
-local function isLocalPlayer(player)
-	local lp = players.LocalPlayer
-	if lp then
-		if player == lp then return true end
-		if player.UserId == lp.UserId then return true end
-	end
-	if localPlayer then
-		if player == localPlayer then return true end
-		if player.UserId == localPlayer.UserId then return true end
-	end
-	return false
-end
-
 local function createEsp(player)
-	if isLocalPlayer(player) then return end
+	-- Single, cheap identity check — localPlayer is already upvalued
+	if player == localPlayer then return end
 
 	local billboard, nameLabel = createBillboard()
 
 	local obj = {
-		player = player,
+		player    = player,
 		billboard = billboard,
 		nameLabel = nameLabel,
-		drawings = {
+		drawings  = {
 			box       = createDrawing("Square"),
 			healthBar = createDrawing("Line"),
 			tracer    = createDrawing("Line"),
@@ -239,49 +237,59 @@ local function createEsp(player)
 		},
 		highlight = Instance.new("Highlight"),
 	}
-	obj.drawings.distText.Size = 12
-	obj.drawings.distText.Font = Drawing.Fonts.Monospace
-	obj.drawings.distText.Outline = false
-	obj.drawings.distText.Center = true
-	obj.drawings.distText.Color = Color3.fromRGB(200, 200, 200)
+
+	local dt = obj.drawings.distText
+	dt.Size    = 12
+	dt.Font    = Drawing.Fonts.Monospace
+	dt.Outline = false
+	dt.Center  = true
+	dt.Color   = c3RGB(200, 200, 200)
+
 	EspInterface._cache[player] = obj
 end
 
 local function removeEsp(player)
 	local obj = EspInterface._cache[player]
 	if obj then
-		for _, d in next, obj.drawings do
-			if d.Remove then d:Remove() else d:Remove() end
-		end
+		for _, d in next, obj.drawings do d:Remove() end
 		obj.highlight:Destroy()
 		obj.billboard:Destroy()
 		EspInterface._cache[player] = nil
 	end
 end
 
+local function hideAll(obj)
+	local d = obj.drawings
+	d.box.Visible       = false
+	d.healthBar.Visible = false
+	d.tracer.Visible    = false
+	d.distText.Visible  = false
+	obj.highlight.Enabled = false
+	obj.billboard.Enabled = false
+end
+
 local function updateEsp()
 	camera = workspace.CurrentCamera
 	local viewportSize = camera.ViewportSize
 
-	local lp = players.LocalPlayer
-	if lp and EspInterface._cache[lp] then removeEsp(lp) end
-	if lp then
-		for player in next, EspInterface._cache do
-			if player.UserId == lp.UserId then removeEsp(player) break end
-		end
-	end
+	-- Cache shared settings and rainbow table once per frame
+	local shared       = EspInterface.shared
+	local rainbow      = shared.rainbow
+	local limitDist    = shared.limitDistance
+	local maxDist      = shared.maxDistance
+	-- Tracer origin is constant within the frame; compute once outside the player loop
+	local tracerOrigin = v2New(viewportSize.X * 0.5, viewportSize.Y)
 
 	for player, obj in next, EspInterface._cache do
 		local char    = player.Character
 		local options = getEspState(player)
 
+		-- Guard: disabled, missing parts, or player left
 		if not (options.enabled and char
 			and char:FindFirstChild("HumanoidRootPart")
 			and char:FindFirstChild("Head")
 			and player.Parent) then
-			for _, d in next, obj.drawings do d.Visible = false end
-			obj.highlight.Enabled = false
-			obj.billboard.Enabled = false
+			hideAll(obj)
 			continue
 		end
 
@@ -290,83 +298,98 @@ local function updateEsp()
 		local hum  = char:FindFirstChildOfClass("Humanoid")
 
 		if not hum or hum.Health <= 0 then
-			for _, d in next, obj.drawings do d.Visible = false end
-			obj.highlight.Enabled = false
-			obj.billboard.Enabled = false
+			hideAll(obj)
 			continue
 		end
 
-		local screenPoint, onScreen = camera:WorldToViewportPoint(root.Position)
-		local depth = screenPoint.Z
+		-- Two WorldToViewportPoint calls instead of three:
+		-- topSP  = top of head,  botSP = feet (root - 3)
+		-- Center X is the average of their screen Xs (accurate for upright characters)
+		local topSP = camera:WorldToViewportPoint(head.Position + v3New(0, head.Size.Y * 0.5, 0))
+		local botSP = camera:WorldToViewportPoint(root.Position - v3New(0, 3, 0))
 
-		if EspInterface.shared.limitDistance and depth > EspInterface.shared.maxDistance then
+		local depth    = (topSP.Z + botSP.Z) * 0.5
+		local centerX  = (topSP.X + botSP.X) * 0.5
+		local onScreen = topSP.Z > 0
+
+		if limitDist and depth > maxDist then
 			onScreen = false
 		end
 
+		-- Chams (highlight) — independent of onScreen
 		if options.chams then
-			local fillColor = resolveFeatureColor(options, "chamsFillColor", "chams")
-			obj.highlight.FillColor       = fillColor
-			obj.highlight.FillTransparency = options.chamsFillColor[2] or 0.5
-			obj.highlight.OutlineColor    = options.chamsOutlineColor[1] or Color3.new(1, 1, 1)
-			obj.highlight.Enabled         = true
-			obj.highlight.Parent          = char
+			local hl = obj.highlight
+			hl.FillColor        = resolveFeatureColor(rainbow, options, "chamsFillColor", "chams")
+			hl.FillTransparency = options.chamsFillColor[2] or 0.5
+			hl.OutlineColor     = options.chamsOutlineColor[1] or WHITE
+			hl.Enabled          = true
+			hl.Parent           = char
 		else
-			obj.highlight.Enabled = false
-			obj.highlight.Parent  = nil
+			local hl = obj.highlight
+			hl.Enabled = false
+			hl.Parent  = nil
 		end
 
-		local showLabels = onScreen and depth > 0
-		obj.billboard.Enabled = showLabels and options.name
-		if showLabels then
-			obj.billboard.Adornee = head
-			obj.nameLabel.Visible = options.name
-			if options.name then
-				local nameColor = resolveFeatureColor(options, "nameColor", "name")
-				obj.nameLabel.Text       = player.DisplayName .. " (" .. player.Name .. ")"
-				obj.nameLabel.TextColor3 = nameColor
-			else
-				obj.nameLabel.Text = ""
-			end
-		end
-
-		if onScreen and depth > 0 then
-			local topPoint = camera:WorldToViewportPoint(head.Position + Vector3.new(0, head.Size.Y / 2, 0))
-			local botPoint = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
-
-			local height = math.abs(topPoint.Y - botPoint.Y)
+		if onScreen then
+			local height = mathAbs(topSP.Y - botSP.Y)
 			local width  = height * 0.6
-			local tl     = Vector2.new(screenPoint.X - width / 2, topPoint.Y)
+			local tlX    = centerX - width * 0.5
+			local tlY    = topSP.Y
 
-			local box = obj.drawings.box
-			box.Visible      = options.box
-			box.Position     = tl
-			box.Size         = Vector2.new(width, height)
-			box.Color 		 = resolveFeatureColor(options, "boxColor", "box")
+			-- Billboard / name label
+			local showName = options.name
+			obj.billboard.Enabled = showName
+			if showName then
+				obj.billboard.Adornee    = head
+				obj.nameLabel.Visible    = true
+				obj.nameLabel.Text       = player.DisplayName .. " (" .. player.Name .. ")"
+				obj.nameLabel.TextColor3 = resolveFeatureColor(rainbow, options, "nameColor", "name")
+			else
+				obj.nameLabel.Visible = false
+				obj.nameLabel.Text    = ""
+			end
+
+			-- Box
+			local box      = obj.drawings.box
+			box.Visible    = options.box
+			box.Position   = v2New(tlX, tlY)
+			box.Size       = v2New(width, height)
+			box.Color      = resolveFeatureColor(rainbow, options, "boxColor", "box")
 			box.Transparency = options.boxColor[2] or 1
 
-			local hb = obj.drawings.healthBar
-			hb.Visible    = options.healthBar
-			local hp      = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
-			hb.From       = Vector2.new(tl.X - 6, tl.Y + height)
-			hb.To         = Vector2.new(tl.X - 6, tl.Y + height - (height * hp))
-			hb.Color      = Color3.fromRGB(255, 0, 0):Lerp(Color3.fromRGB(0, 255, 0), hp)
-			hb.Thickness  = 2
+			-- Health bar
+			local hb    = obj.drawings.healthBar
+			hb.Visible  = options.healthBar
+			local hp    = mathClamp(hum.Health / hum.MaxHealth, 0, 1)
+			local hbX   = tlX - 6
+			local hbBot = tlY + height
+			hb.From      = v2New(hbX, hbBot)
+			hb.To        = v2New(hbX, hbBot - height * hp)
+			hb.Color     = HP_RED:Lerp(HP_GREEN, hp)
+			hb.Thickness = 2
 
-			local tr = obj.drawings.tracer
-			tr.Visible = options.tracer
-			tr.From    = Vector2.new(viewportSize.X / 2, viewportSize.Y)
-			tr.To      = Vector2.new(screenPoint.X, screenPoint.Y)
-			tr.Color   = resolveFeatureColor(options, "tracerColor", "tracer")
+			-- Tracer
+			local tr    = obj.drawings.tracer
+			tr.Visible  = options.tracer
+			tr.From     = tracerOrigin
+			tr.To       = v2New(centerX, (topSP.Y + botSP.Y) * 0.5)
+			tr.Color    = resolveFeatureColor(rainbow, options, "tracerColor", "tracer")
 
-			local dt = obj.drawings.distText
-			dt.Visible = options.distance
+			-- Distance text
+			local dt    = obj.drawings.distText
+			dt.Visible  = options.distance
 			if options.distance then
-				dt.Text     = "[" .. math.round(depth) .. "m]"
-				dt.Color    = resolveFeatureColor(options, "distanceColor", "distance")
-				dt.Position = Vector2.new(tl.X + width / 2, tl.Y + height + 4)
+				dt.Text     = "[" .. mathRound(depth) .. "m]"
+				dt.Color    = resolveFeatureColor(rainbow, options, "distanceColor", "distance")
+				dt.Position = v2New(centerX, tlY + height + 4)
 			end
 		else
-			for _, d in next, obj.drawings do d.Visible = false end
+			local d = obj.drawings
+			d.box.Visible       = false
+			d.healthBar.Visible = false
+			d.tracer.Visible    = false
+			d.distText.Visible  = false
+			obj.billboard.Enabled = false
 		end
 	end
 end
