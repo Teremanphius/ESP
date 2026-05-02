@@ -260,17 +260,13 @@ local function updateEsp()
 		end
 
 		local showLabels = onScreen and depth > 0
-		obj.billboard.Enabled = showLabels and (options.name or options.distance)
+		obj.billboard.Enabled = showLabels and options.name
 		if showLabels then
 			obj.billboard.Adornee = head
 
 			obj.nameLabel.Visible = options.name
 			obj.nameLabel.Text = options.name and (player.DisplayName .. " (" .. player.Name .. ")") or ""
 			obj.nameLabel.TextColor3 = getTeamColor(player, options.nameColor)
-
-			obj.distLabel.Visible = options.distance
-			obj.distLabel.Text = options.distance and ("[" .. math.round(depth) .. "m]") or ""
-			obj.distLabel.TextColor3 = getTeamColor(player, options.distanceColor)
 		end
 
 		if onScreen and depth > 0 then
