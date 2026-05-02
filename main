@@ -187,11 +187,11 @@ local function createEsp(player)
 		},
 		highlight = Instance.new("Highlight")
 	}
-	obj.drawings.distText.Size = 13
+	obj.drawings.distText.Size = 12
 	obj.drawings.distText.Font = Drawing.Fonts.Monospace
-	obj.drawings.distText.Outline = true
+	obj.drawings.distText.Outline = false
 	obj.drawings.distText.Center = true
-	obj.highlight.Parent = highlightContainer
+	obj.drawings.distText.Color = Color3.fromRGB(200, 200, 200)
 	EspInterface._cache[player] = obj
 end
 
@@ -270,12 +270,19 @@ local function updateEsp()
 		end
 
 		if onScreen and depth > 0 then
-			local headPoint = camera:WorldToViewportPoint(head.Position + Vector3.new(0, head.Size.Y / 2, 0))
-			local hum = char:FindFirstChildOfClass("Humanoid")
-			local feetY = screenPoint.Y + (hum and hum.HipHeight * (screenPoint.Z * 0.1) or 20)
-			local height = math.abs(headPoint.Y - feetY)
-			local width  = height * 0.55
-			local tl     = Vector2.new(screenPoint.X - width / 2, headPoint.Y)
+			local topPoint = camera:WorldToViewportPoint(head.Position + Vector3.new(0, head.Size.Y / 2, 0))
+			local botPoint = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0)) -- approx feet
+
+			local height = math.abs(topPoint.Y - botPoint.Y)
+			local width  = height * 0.6
+			local tl     = Vector2.new(screenPoint.X - width / 2, topPoint.Y)
+
+			local box = obj.drawings.box
+			box.Visible = options.box
+			box.Position = tl
+			box.Size = Vector2.new(width, height)
+			box.Color = getTeamColor(player, options.boxColor)
+			box.Transparency = options.boxColor[2] or 1
 
 			local box = obj.drawings.box
 			box.Visible = options.box
@@ -303,7 +310,7 @@ local function updateEsp()
 			if options.distance then
 				dt.Text = "[" .. math.round(depth) .. "m]"
 				dt.Color = getTeamColor(player, options.distanceColor)
-				dt.Position = Vector2.new(tl.X + width / 2, tl.Y + height + 2)
+				dt.Position = Vector2.new(tl.X + width / 2, tl.Y + height + 4)
 			end
 		else
 			for _, d in next, obj.drawings do d.Visible = false end
