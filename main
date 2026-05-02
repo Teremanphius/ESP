@@ -115,46 +115,86 @@ local function createBillboard()
 	return bb, nameLabel, distLabel
 end
 
-local EspInterface = {
-	_cache = {},
-	shared = { limitDistance = false, maxDistance = 500 },
-	teams = {
-		enemy = {
-			enabled = false, box = true, boxColor = {Color3.fromRGB(255, 0, 0), 1},
-			name = true, nameColor = {Color3.fromRGB(255, 255, 255), 1},
-			distance = true, distanceColor = {Color3.fromRGB(255, 255, 255), 1},
-			healthBar = true, tracer = false, tracerColor = {Color3.fromRGB(255, 0, 0), 1},
-			chams = true, chamsFillColor = {Color3.fromRGB(255, 0, 0), 0.5}, chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0}
-		},
-		friendly = {
-			enabled = false, box = true, boxColor = {Color3.fromRGB(0, 255, 0), 1},
-			name = true, nameColor = {Color3.fromRGB(255, 255, 255), 1},
-			distance = true, distanceColor = {Color3.fromRGB(255, 255, 255), 1},
-			healthBar = true, tracer = false, tracerColor = {Color3.fromRGB(0, 255, 0), 1},
-			chams = false, chamsFillColor = {Color3.fromRGB(0, 255, 0), 0.5}, chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0}
-		},
-		neutral = {
-			enabled = true, box = true, boxColor = {Color3.fromRGB(150, 150, 150), 1},
-			name = true, nameColor = {Color3.fromRGB(255, 255, 255), 1},
-			distance = true, distanceColor = {Color3.fromRGB(255, 255, 255), 1},
-			healthBar = true, tracer = false, tracerColor = {Color3.fromRGB(150, 150, 150), 1},
-			chams = false, chamsFillColor = {Color3.fromRGB(150, 150, 150), 0.5}, chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0}
-		}
-	}
+local RAINBOW_OFFSETS = {
+	box      = 0,
+	name     = 0.15,
+	distance = 0.30,
+	tracer   = 0.45,
+	chams    = 0.60,
 }
 
+local function getRainbowColor()
+	local s = EspInterface.shared
+	local hue = (tick() * s.rainbowSpeed) % 1
+	return Color3.fromHSV(hue, s.rainbowSaturation, 1)
+end
+
+local EspInterface = {
+	_cache = {},
+	shared = {
+		limitDistance     = false,
+		maxDistance       = 1000,
+		rainbowEnabled    = false,
+		rainbowSpeed      = 0.5,
+		rainbowSaturation = 1.0,
+	},
+	teams = {
+		enemy = {
+			enabled = false,
+			box = true,        boxColor = {Color3.fromRGB(255, 0, 0), 1},
+			name = true,       nameColor = {Color3.fromRGB(255, 255, 255), 1},
+			distance = true,   distanceColor = {Color3.fromRGB(255, 255, 255), 1},
+			healthBar = true,
+			tracer = false,    tracerColor = {Color3.fromRGB(255, 0, 0), 1},
+			chams = true,
+			chamsFillColor = {Color3.fromRGB(255, 0, 0), 0.5},
+			chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0},
+		},
+		friendly = {
+			enabled = false,
+			box = true,        boxColor = {Color3.fromRGB(0, 255, 0), 1},
+			name = true,       nameColor = {Color3.fromRGB(255, 255, 255), 1},
+			distance = true,   distanceColor = {Color3.fromRGB(255, 255, 255), 1},
+			healthBar = true,
+			tracer = false,    tracerColor = {Color3.fromRGB(0, 255, 0), 1},
+			chams = false,
+			chamsFillColor = {Color3.fromRGB(0, 255, 0), 0.5},
+			chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0},
+		},
+		neutral = {
+			enabled = true,
+			box = true,        boxColor = {Color3.fromRGB(150, 150, 150), 1},
+			name = true,       nameColor = {Color3.fromRGB(255, 255, 255), 1},
+			distance = true,   distanceColor = {Color3.fromRGB(255, 255, 255), 1},
+			healthBar = true,
+			tracer = false,    tracerColor = {Color3.fromRGB(150, 150, 150), 1},
+			chams = false,
+			chamsFillColor = {Color3.fromRGB(150, 150, 150), 0.5},
+			chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0},
+		},
+	},
+}
+
+local function resolveFeatureColor(options, colorKey, _rainbowKey, _featureKey)
+	if EspInterface.shared.rainbowEnabled then
+		return getRainbowColor()
+	end
+	local colorTable = options[colorKey]
+	return colorTable and colorTable[1] or Color3.new(1, 1, 1)
+end
+
 local function getTeamColor(player, optionsColor)
-    if not localPlayer.Team or not player.Team or #teams:GetChildren() == 0 then
-        return optionsColor[1] or Color3.fromRGB(150, 150, 150)
-    end
-    return optionsColor[1] or Color3.new(1, 1, 1)
+	if not localPlayer.Team or not player.Team or #teams:GetChildren() == 0 then
+		return optionsColor[1] or Color3.fromRGB(150, 150, 150)
+	end
+	return optionsColor[1] or Color3.new(1, 1, 1)
 end
 
 local function getEspState(player)
-    if not localPlayer.Team or not player.Team or #teams:GetChildren() == 0 then
-        return EspInterface.teams.neutral
-    end
-    return EspInterface.teams[player.Team == localPlayer.Team and "friendly" or "enemy"]
+	if not localPlayer.Team or not player.Team or #teams:GetChildren() == 0 then
+		return EspInterface.teams.neutral
+	end
+	return EspInterface.teams[player.Team == localPlayer.Team and "friendly" or "enemy"]
 end
 
 local function isLocalPlayer(player)
@@ -180,12 +220,12 @@ local function createEsp(player)
 		billboard = billboard,
 		nameLabel = nameLabel,
 		drawings = {
-			box        = createDrawing("Square"),
-			healthBar  = createDrawing("Line"),
-			tracer     = createDrawing("Line"),
-			distText   = Drawing.new("Text")
+			box       = createDrawing("Square"),
+			healthBar = createDrawing("Line"),
+			tracer    = createDrawing("Line"),
+			distText  = Drawing.new("Text"),
 		},
-		highlight = Instance.new("Highlight")
+		highlight = Instance.new("Highlight"),
 	}
 	obj.drawings.distText.Size = 12
 	obj.drawings.distText.Font = Drawing.Fonts.Monospace
@@ -220,7 +260,7 @@ local function updateEsp()
 	end
 
 	for player, obj in next, EspInterface._cache do
-		local char = player.Character
+		local char    = player.Character
 		local options = getEspState(player)
 
 		if not (options.enabled and char
@@ -251,65 +291,66 @@ local function updateEsp()
 			onScreen = false
 		end
 
-		obj.highlight.Enabled = options.chams
 		if options.chams then
-			obj.highlight.Adornee = char
-			obj.highlight.FillColor = getTeamColor(player, options.chamsFillColor)
+			local fillColor = resolveFeatureColor(options, "chamsFillColor", "chamsRainbow", "chams")
+			obj.highlight.FillColor       = fillColor
 			obj.highlight.FillTransparency = options.chamsFillColor[2] or 0.5
-			obj.highlight.OutlineColor = options.chamsOutlineColor[1] or Color3.new(1, 1, 1)
+			obj.highlight.OutlineColor    = options.chamsOutlineColor[1] or Color3.new(1, 1, 1)
+			obj.highlight.Enabled         = true
+			obj.highlight.Parent          = char
+		else
+			obj.highlight.Enabled = false
+			obj.highlight.Parent  = nil
 		end
 
 		local showLabels = onScreen and depth > 0
 		obj.billboard.Enabled = showLabels and options.name
 		if showLabels then
 			obj.billboard.Adornee = head
-
 			obj.nameLabel.Visible = options.name
-			obj.nameLabel.Text = options.name and (player.DisplayName .. " (" .. player.Name .. ")") or ""
-			obj.nameLabel.TextColor3 = getTeamColor(player, options.nameColor)
+			if options.name then
+				local nameColor = resolveFeatureColor(options, "nameColor", "nameRainbow", "name")
+				obj.nameLabel.Text       = player.DisplayName .. " (" .. player.Name .. ")"
+				obj.nameLabel.TextColor3 = nameColor
+			else
+				obj.nameLabel.Text = ""
+			end
 		end
 
 		if onScreen and depth > 0 then
 			local topPoint = camera:WorldToViewportPoint(head.Position + Vector3.new(0, head.Size.Y / 2, 0))
-			local botPoint = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0)) -- approx feet
+			local botPoint = camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
 
 			local height = math.abs(topPoint.Y - botPoint.Y)
 			local width  = height * 0.6
 			local tl     = Vector2.new(screenPoint.X - width / 2, topPoint.Y)
 
 			local box = obj.drawings.box
-			box.Visible = options.box
-			box.Position = tl
-			box.Size = Vector2.new(width, height)
-			box.Color = getTeamColor(player, options.boxColor)
-			box.Transparency = options.boxColor[2] or 1
-
-			local box = obj.drawings.box
-			box.Visible = options.box
-			box.Position = tl
-			box.Size = Vector2.new(width, height)
-			box.Color = getTeamColor(player, options.boxColor)
+			box.Visible      = options.box
+			box.Position     = tl
+			box.Size         = Vector2.new(width, height)
+			box.Color        = resolveFeatureColor(options, "boxColor", "boxRainbow", "box")
 			box.Transparency = options.boxColor[2] or 1
 
 			local hb = obj.drawings.healthBar
-			hb.Visible = options.healthBar
-			local hp = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
-			hb.From = Vector2.new(tl.X - 6, tl.Y + height)
-			hb.To   = Vector2.new(tl.X - 6, tl.Y + height - (height * hp))
-			hb.Color = Color3.fromRGB(255, 0, 0):Lerp(Color3.fromRGB(0, 255, 0), hp)
-			hb.Thickness = 2
+			hb.Visible    = options.healthBar
+			local hp      = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+			hb.From       = Vector2.new(tl.X - 6, tl.Y + height)
+			hb.To         = Vector2.new(tl.X - 6, tl.Y + height - (height * hp))
+			hb.Color      = Color3.fromRGB(255, 0, 0):Lerp(Color3.fromRGB(0, 255, 0), hp)
+			hb.Thickness  = 2
 
 			local tr = obj.drawings.tracer
 			tr.Visible = options.tracer
-			tr.From  = Vector2.new(viewportSize.X / 2, viewportSize.Y)
-			tr.To    = Vector2.new(screenPoint.X, screenPoint.Y)
-			tr.Color = getTeamColor(player, options.tracerColor)
+			tr.From    = Vector2.new(viewportSize.X / 2, viewportSize.Y)
+			tr.To      = Vector2.new(screenPoint.X, screenPoint.Y)
+			tr.Color   = resolveFeatureColor(options, "tracerColor", "tracerRainbow", "tracer")
 
 			local dt = obj.drawings.distText
 			dt.Visible = options.distance
 			if options.distance then
-				dt.Text = "[" .. math.round(depth) .. "m]"
-				dt.Color = getTeamColor(player, options.distanceColor)
+				dt.Text     = "[" .. math.round(depth) .. "m]"
+				dt.Color    = resolveFeatureColor(options, "distanceColor", "distanceRainbow", "distance")
 				dt.Position = Vector2.new(tl.X + width / 2, tl.Y + height + 4)
 			end
 		else
