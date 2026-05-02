@@ -173,20 +173,24 @@ end
 local function createEsp(player)
 	if isLocalPlayer(player) then return end
 
-	local billboard, nameLabel, distLabel = createBillboard()
+	local billboard, nameLabel = createBillboard()
 
 	local obj = {
 		player = player,
 		billboard = billboard,
 		nameLabel = nameLabel,
-		distLabel = distLabel,
 		drawings = {
 			box        = createDrawing("Square"),
 			healthBar  = createDrawing("Line"),
-			tracer     = createDrawing("Line")
+			tracer     = createDrawing("Line"),
+			distText   = Drawing.new("Text")
 		},
 		highlight = Instance.new("Highlight")
 	}
+	obj.drawings.distText.Size = 13
+	obj.drawings.distText.Font = Drawing.Fonts.Monospace
+	obj.drawings.distText.Outline = true
+	obj.drawings.distText.Center = true
 	obj.highlight.Parent = highlightContainer
 	EspInterface._cache[player] = obj
 end
@@ -194,7 +198,9 @@ end
 local function removeEsp(player)
 	local obj = EspInterface._cache[player]
 	if obj then
-		for _, d in next, obj.drawings do d:Remove() end
+		for _, d in next, obj.drawings do
+			if d.Remove then d:Remove() else d:Remove() end
+		end
 		obj.highlight:Destroy()
 		obj.billboard:Destroy()
 		EspInterface._cache[player] = nil
