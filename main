@@ -76,9 +76,6 @@ local function createDrawing(class)
 	return obj
 end
 
--- BillboardGui for name + distance.
--- Attaches directly to the player's head in 3D world space (same as Highlight),
--- so it never needs WorldToViewportPoint and always positions correctly.
 local function createBillboard()
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "ESPBillboard"
@@ -201,7 +198,6 @@ local function updateEsp()
 	camera = workspace.CurrentCamera
 	local viewportSize = camera.ViewportSize
 
-	-- Purge local player every frame (handles executor timing issues)
 	local lp = players.LocalPlayer
 	if lp and EspInterface._cache[lp] then removeEsp(lp) end
 	if lp then
@@ -235,7 +231,6 @@ local function updateEsp()
 			continue
 		end
 
-		-- Only WorldToViewportPoint call left — used for box/tracer/healthbar and depth
 		local screenPoint, onScreen = camera:WorldToViewportPoint(root.Position)
 		local depth = screenPoint.Z
 
@@ -243,7 +238,6 @@ local function updateEsp()
 			onScreen = false
 		end
 
-		-- Chams (Highlight is 3D, always correct)
 		obj.highlight.Enabled = options.chams
 		if options.chams then
 			obj.highlight.Adornee = char
@@ -252,14 +246,13 @@ local function updateEsp()
 			obj.highlight.OutlineColor = options.chamsOutlineColor[1] or Color3.new(1, 1, 1)
 		end
 
-		-- Name + Distance via BillboardGui (3D world object, attaches to head directly)
 		local showLabels = onScreen and depth > 0
 		obj.billboard.Enabled = showLabels and (options.name or options.distance)
 		if showLabels then
 			obj.billboard.Adornee = head
 
 			obj.nameLabel.Visible = options.name
-			obj.nameLabel.Text = options.name and player.Name or ""
+			obj.nameLabel.Text = options.name and player.DisplayName .. " (" .. player.Name .. ")"
 			obj.nameLabel.TextColor3 = getTeamColor(player, options.nameColor)
 
 			obj.distLabel.Visible = options.distance
@@ -267,7 +260,6 @@ local function updateEsp()
 			obj.distLabel.TextColor3 = getTeamColor(player, options.distanceColor)
 		end
 
-		-- Box, health bar, tracer (2D screen-space)
 		if onScreen and depth > 0 then
 			local headPoint = camera:WorldToViewportPoint(head.Position + Vector3.new(0, head.Size.Y / 2, 0))
 			local height = math.abs(headPoint.Y - screenPoint.Y) * 2.2
