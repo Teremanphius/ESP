@@ -304,7 +304,7 @@ local function updateEsp()
 		end
 
 		if options.chams then
-			local fillColor = resolveFeatureColor(options, "chamsFillColor", "chamsRainbow", "chams")
+			local fillColor = resolveFeatureColor(options, "chamsFillColor", "chams")
 			obj.highlight.FillColor       = fillColor
 			obj.highlight.FillTransparency = options.chamsFillColor[2] or 0.5
 			obj.highlight.OutlineColor    = options.chamsOutlineColor[1] or Color3.new(1, 1, 1)
@@ -321,7 +321,7 @@ local function updateEsp()
 			obj.billboard.Adornee = head
 			obj.nameLabel.Visible = options.name
 			if options.name then
-				local nameColor = resolveFeatureColor(options, "nameColor", "nameRainbow", "name")
+				local nameColor = resolveFeatureColor(options, "nameColor", "name")
 				obj.nameLabel.Text       = player.DisplayName .. " (" .. player.Name .. ")"
 				obj.nameLabel.TextColor3 = nameColor
 			else
@@ -341,7 +341,7 @@ local function updateEsp()
 			box.Visible      = options.box
 			box.Position     = tl
 			box.Size         = Vector2.new(width, height)
-			box.Color        = resolveFeatureColor(options, "boxColor", "boxRainbow", "box")
+			box.Color 		 = resolveFeatureColor(options, "boxColor", "box")
 			box.Transparency = options.boxColor[2] or 1
 
 			local hb = obj.drawings.healthBar
@@ -356,13 +356,13 @@ local function updateEsp()
 			tr.Visible = options.tracer
 			tr.From    = Vector2.new(viewportSize.X / 2, viewportSize.Y)
 			tr.To      = Vector2.new(screenPoint.X, screenPoint.Y)
-			tr.Color   = resolveFeatureColor(options, "tracerColor", "tracerRainbow", "tracer")
+			tr.Color   = resolveFeatureColor(options, "tracerColor", "tracer")
 
 			local dt = obj.drawings.distText
 			dt.Visible = options.distance
 			if options.distance then
 				dt.Text     = "[" .. math.round(depth) .. "m]"
-				dt.Color    = resolveFeatureColor(options, "distanceColor", "distanceRainbow", "distance")
+				dt.Color    = resolveFeatureColor(options, "distanceColor", "distance")
 				dt.Position = Vector2.new(tl.X + width / 2, tl.Y + height + 4)
 			end
 		else
