@@ -6,7 +6,6 @@ local coreGui = gethui and gethui() or game:GetService("CoreGui")
 
 local localPlayer = players.LocalPlayer
 local camera = workspace.CurrentCamera
-local wtvp = camera.WorldToViewportPoint
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "ESPGui"
@@ -217,9 +216,9 @@ local function updateEsp()
 			continue
 		end
 
-		local screenPoint, onScreen = wtvp(camera, root.Position)
+		local screenPoint, onScreen = camera:WorldToViewportPoint(root.Position)
 		-- headPoint: use the top of the head so name floats clearly above it
-		local headPoint = wtvp(camera, head.Position + Vector3.new(0, head.Size.Y / 2 + 0.1, 0))
+		local headPoint = camera:WorldToViewportPoint(head.Position + Vector3.new(0, head.Size.Y / 2 + 0.1, 0))
 		local depth = screenPoint.Z
 
 		if EspInterface.shared.limitDistance and depth > EspInterface.shared.maxDistance then
