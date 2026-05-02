@@ -131,12 +131,18 @@ end
 
 local EspInterface = {
 	_cache = {},
-	shared = {
+		shared = {
 		limitDistance     = false,
-		maxDistance       = 1000,
-		rainbowEnabled    = false,
+		maxDistance       = 500,
 		rainbowSpeed      = 0.5,
 		rainbowSaturation = 1.0,
+		rainbow = {
+			box      = false,
+			name     = false,
+			distance = false,
+			tracer   = false,
+			chams    = false,
+		},
 	},
 	teams = {
 		enemy = {
@@ -175,8 +181,14 @@ local EspInterface = {
 	},
 }
 
-local function resolveFeatureColor(options, colorKey, _rainbowKey, _featureKey)
-	if EspInterface.shared.rainbowEnabled then
+local function getRainbowColor()
+	local s = EspInterface.shared
+	local hue = (tick() * s.rainbowSpeed) % 1
+	return Color3.fromHSV(hue, s.rainbowSaturation, 1)
+end
+
+local function resolveFeatureColor(options, colorKey, featureKey)
+	if EspInterface.shared.rainbow[featureKey] then
 		return getRainbowColor()
 	end
 	local colorTable = options[colorKey]
