@@ -136,10 +136,21 @@ local function getEspState(player)
 	return EspInterface.teams[player.Team == localPlayer.Team and "friendly" or "enemy"]
 end
 
-local function createEsp(player)
-
+local function isLocalPlayer(player)
 	local lp = players.LocalPlayer
-	if player == lp or player == localPlayer then return end
+	if lp then
+		if player == lp then return true end
+		if player.UserId == lp.UserId then return true end
+	end
+	if localPlayer then
+		if player == localPlayer then return true end
+		if player.UserId == localPlayer.UserId then return true end
+	end
+	return false
+end
+
+local function createEsp(player)
+	if isLocalPlayer(player) then return end
 
 	local obj = {
 		player = player,
@@ -168,16 +179,24 @@ end
 local function updateEsp()
 	camera = workspace.CurrentCamera
 	local viewportSize = camera.ViewportSize
-	-- Re-fetch localPlayer each frame so it's never stale
+
+	-- Actively purge local player from cache every frame in case they slipped in
+	-- during executor load before LocalPlayer was available
 	local lp = players.LocalPlayer
+	if lp and EspInterface._cache[lp] then
+		removeEsp(lp)
+	end
+	-- Also purge by UserId as a fallback (executor may give different object refs)
+	if lp then
+		for player in next, EspInterface._cache do
+			if player.UserId == lp.UserId then
+				removeEsp(player)
+				break
+			end
+		end
+	end
 
 	for player, obj in next, EspInterface._cache do
-
-		if player == lp then
-			for _, d in next, obj.drawings do d.Visible = false end
-			obj.highlight.Enabled = false
-			continue
-		end
 
 		local char = player.Character
 		local options = getEspState(player)
@@ -199,7 +218,7 @@ local function updateEsp()
 		end
 
 		local screenPoint, onScreen = wtvp(camera, root.Position)
-
+		-- headPoint: use the top of the head so name floats clearly above it
 		local headPoint = wtvp(camera, head.Position + Vector3.new(0, head.Size.Y / 2 + 0.1, 0))
 		local depth = screenPoint.Z
 
@@ -227,6 +246,8 @@ local function updateEsp()
 			box.Color = getTeamColor(player, options.boxColor)
 			box.Transparency = options.boxColor[2] or 1
 
+			-- FIX: anchor name to headPoint.Y so it floats above the actual head,
+			-- not at the box top which sits at/inside the head
 			local nm = obj.drawings.name
 			nm.Visible = options.name
 			nm.Text = player.Name
