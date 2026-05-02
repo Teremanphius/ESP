@@ -120,7 +120,7 @@ local EspInterface = {
 	shared = { limitDistance = false, maxDistance = 500 },
 	teams = {
 		enemy = {
-			enabled = true, box = true, boxColor = {Color3.fromRGB(255, 0, 0), 1},
+			enabled = false, box = true, boxColor = {Color3.fromRGB(255, 0, 0), 1},
 			name = true, nameColor = {Color3.fromRGB(255, 255, 255), 1},
 			distance = true, distanceColor = {Color3.fromRGB(255, 255, 255), 1},
 			healthBar = true, tracer = false, tracerColor = {Color3.fromRGB(255, 0, 0), 1},
@@ -132,22 +132,29 @@ local EspInterface = {
 			distance = true, distanceColor = {Color3.fromRGB(255, 255, 255), 1},
 			healthBar = true, tracer = false, tracerColor = {Color3.fromRGB(0, 255, 0), 1},
 			chams = false, chamsFillColor = {Color3.fromRGB(0, 255, 0), 0.5}, chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0}
+		},
+		neutral = {
+			enabled = true, box = true, boxColor = {Color3.fromRGB(150, 150, 150), 1},
+			name = true, nameColor = {Color3.fromRGB(255, 255, 255), 1},
+			distance = true, distanceColor = {Color3.fromRGB(255, 255, 255), 1},
+			healthBar = true, tracer = false, tracerColor = {Color3.fromRGB(150, 150, 150), 1},
+			chams = false, chamsFillColor = {Color3.fromRGB(150, 150, 150), 0.5}, chamsOutlineColor = {Color3.fromRGB(255, 255, 255), 0}
 		}
 	}
 }
 
 local function getTeamColor(player, optionsColor)
-	if not localPlayer.Team or not player.Team or #teams:GetChildren() == 0 then
-		return Color3.fromRGB(150, 150, 150)
-	end
-	return optionsColor[1] or Color3.new(1, 1, 1)
+    if not localPlayer.Team or not player.Team or #teams:GetChildren() == 0 then
+        return optionsColor[1] or Color3.fromRGB(150, 150, 150)
+    end
+    return optionsColor[1] or Color3.new(1, 1, 1)
 end
 
 local function getEspState(player)
-	if not localPlayer.Team or not player.Team or #teams:GetChildren() == 0 then
-		return EspInterface.teams.enemy
-	end
-	return EspInterface.teams[player.Team == localPlayer.Team and "friendly" or "enemy"]
+    if not localPlayer.Team or not player.Team or #teams:GetChildren() == 0 then
+        return EspInterface.teams.neutral
+    end
+    return EspInterface.teams[player.Team == localPlayer.Team and "friendly" or "enemy"]
 end
 
 local function isLocalPlayer(player)
