@@ -271,9 +271,11 @@ local function updateEsp()
 
 		if onScreen and depth > 0 then
 			local headPoint = camera:WorldToViewportPoint(head.Position + Vector3.new(0, head.Size.Y / 2, 0))
-			local height = math.abs(headPoint.Y - screenPoint.Y) * 2.2
-			local width  = height * 0.65
-			local tl     = Vector2.new(screenPoint.X - width / 2, screenPoint.Y - height / 2)
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			local feetY = screenPoint.Y + (hum and hum.HipHeight * (screenPoint.Z * 0.1) or 20)
+			local height = math.abs(headPoint.Y - feetY)
+			local width  = height * 0.55
+			local tl     = Vector2.new(screenPoint.X - width / 2, headPoint.Y)
 
 			local box = obj.drawings.box
 			box.Visible = options.box
@@ -295,6 +297,14 @@ local function updateEsp()
 			tr.From  = Vector2.new(viewportSize.X / 2, viewportSize.Y)
 			tr.To    = Vector2.new(screenPoint.X, screenPoint.Y)
 			tr.Color = getTeamColor(player, options.tracerColor)
+
+			local dt = obj.drawings.distText
+			dt.Visible = options.distance
+			if options.distance then
+				dt.Text = "[" .. math.round(depth) .. "m]"
+				dt.Color = getTeamColor(player, options.distanceColor)
+				dt.Position = Vector2.new(tl.X + width / 2, tl.Y + height + 2)
+			end
 		else
 			for _, d in next, obj.drawings do d.Visible = false end
 		end
