@@ -137,7 +137,10 @@ local function getEspState(player)
 end
 
 local function createEsp(player)
-	if player == localPlayer then return end
+
+	local lp = players.LocalPlayer
+	if player == lp or player == localPlayer then return end
+
 	local obj = {
 		player = player,
 		drawings = {
@@ -165,8 +168,17 @@ end
 local function updateEsp()
 	camera = workspace.CurrentCamera
 	local viewportSize = camera.ViewportSize
+	-- Re-fetch localPlayer each frame so it's never stale
+	local lp = players.LocalPlayer
 
 	for player, obj in next, EspInterface._cache do
+
+		if player == lp then
+			for _, d in next, obj.drawings do d.Visible = false end
+			obj.highlight.Enabled = false
+			continue
+		end
+
 		local char = player.Character
 		local options = getEspState(player)
 
@@ -187,7 +199,8 @@ local function updateEsp()
 		end
 
 		local screenPoint, onScreen = wtvp(camera, root.Position)
-		local headPoint = wtvp(camera, head.Position + Vector3.new(0, 0.5, 0))
+
+		local headPoint = wtvp(camera, head.Position + Vector3.new(0, head.Size.Y / 2 + 0.1, 0))
 		local depth = screenPoint.Z
 
 		if EspInterface.shared.limitDistance and depth > EspInterface.shared.maxDistance then
@@ -217,11 +230,12 @@ local function updateEsp()
 			local nm = obj.drawings.name
 			nm.Visible = options.name
 			nm.Text = player.Name
-			nm.Position = Vector2.new(screenPoint.X, tl.Y - 16)
+			nm.Position = Vector2.new(screenPoint.X, headPoint.Y - 18)
 			nm.Center = true
 			nm.Outline = true
 			nm.Color = getTeamColor(player, options.nameColor)
 
+			-- FIX: distance goes below the box, not in the head
 			local dist = obj.drawings.distance
 			dist.Visible = options.distance
 			dist.Text = "[" .. math.round(depth) .. "m]"
